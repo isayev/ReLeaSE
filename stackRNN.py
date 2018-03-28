@@ -3,6 +3,10 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
+from data import Data
+
+data = Data()
+
 
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, stack_width, stack_depth,
@@ -16,7 +20,7 @@ class StackAugmentedRNN(nn.Module):
 
         self.use_cuda = use_cuda
         if self.use_cuda is None:
-            cd
+            self.use_cuda = torch.cuda.is_available()
 
         self.n_layers = n_layers
 
@@ -108,32 +112,30 @@ class StackAugmentedRNN(nn.Module):
 
         return loss.data[0] / len(inp)
 
-
     def evaluate(self, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
-        hidden = decoder.init_hidden()
-        cell = decoder.init_cell()
-        stack = decoder.initStack()
-        prime_input = char_tensor(prime_str)
+        hidden = self.init_hidden()
+        cell = self.init_cell()
+        stack = self.initStack()
+        prime_input = data.char_tensor(prime_str)
         predicted = prime_str
 
         # Use priming string to "build up" hidden state
         for p in range(len(prime_str)):
-            _, hidden, cell, stack = decoder(prime_input[p], hidden, cell, stack)
+            _, hidden, cell, stack = self.forward(prime_input[p], hidden, cell, stack)
         inp = prime_input[-1]
 
         for p in range(predict_len):
-            output, hidden, cell, stack = decoder(inp, hidden, cell, stack)
+            output, hidden, cell, stack = self.forward(inp, hidden, cell, stack)
 
             # Sample from the network as a multinomial distribution
             output_dist = output.data.view(-1).div(temperature).exp()
             top_i = torch.multinomial(output_dist, 1)[0]
 
             # Add predicted character to string and use as next input
-            predicted_char = all_characters[top_i]
+            predicted_char = data.all_characters[top_i]
             predicted += predicted_char
             inp = self.char_tensor(predicted_char)
-            if predicted_char == '>':
+            if predicted_char == end_token:
                 break
 
         return predicted
-
