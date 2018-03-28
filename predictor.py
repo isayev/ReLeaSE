@@ -6,9 +6,6 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor as RFC
 from sklearn.externals import joblib
 from sklearn import metrics
-from data import Data
-
-data = Data()
 
 
 class RandomForestQSAR(object):
@@ -31,13 +28,13 @@ class RandomForestQSAR(object):
         for i in range(self.n_ensemble):
             joblib.dump(self.classifiers[i], path + str(i) + '.pkl')
 
-    def fit_model(self):
+    def fit_model(self, data, cross_val_data, cross_val_labels):
         auc = []
         for i in range(self.n_ensemble):
-            train_sm = np.concatenate(data.cross_val_data[:i] + data.cross_val_data[(i + 1):])
-            test_sm = data.cross_val_data[i]
-            train_labels = np.concatenate(data.cross_val_labels[:i] + data.cross_val_labels[(i + 1):])
-            test_labels = data.cross_val_labels[i]
+            train_sm = np.concatenate(cross_val_data[:i] + cross_val_data[(i + 1):])
+            test_sm = cross_val_data[i]
+            train_labels = np.concatenate(cross_val_labels[:i] + cross_val_labels[(i + 1):])
+            test_labels = cross_val_labels[i]
             fp_train = data.get_fp(train_sm)
             fp_test = data.get_fp(test_sm)
             self.classifiers[i].fit(fp_train, train_labels.ravel())
@@ -46,7 +43,7 @@ class RandomForestQSAR(object):
             auc.append(metrics.auc(fpr, tpr))
         return auc
 
-    def predict(self, smiles, average=True):
+    def predict(self, data, smiles, average=True):
         fps = data.get_fp(smiles)
         assert len(smiles) == len(fps)
         clean_smiles = []
