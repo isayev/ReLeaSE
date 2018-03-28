@@ -5,19 +5,17 @@ import random
 import time
 import math
 import numpy as np
+import csv
 
 from rdkit import Chem
-
-CHEMBL_FILENAME = ' '
+from rdkit import DataStructs
 
 
 class Data(object):
-    def __init__(self, training_data='ChEMBL', replay_data=None, replay_capacity=10000, use_cuda=None):
+    def __init__(self, training_data_path, replay_data=None, replay_capacity=10000, use_cuda=None):
         super(Data, self).__init__()
-        if training_data == 'ChEMBL':
-            self.file, success = self.read_smi_file(CHEMBL_FILENAME, unique=True)
-        else:
-            self.file, success = self.read_smi_file(training_data, unique=True)
+        self.file, success = self.read_smi_file(training_data_path, unique=True)
+
         assert success
         self.file_len = len(self.file)
         self.all_characters, self.char2idx, self.n_characters = self.tokenize(self.file)
@@ -87,6 +85,64 @@ class Data(object):
         target = self.char_tensor(chunk[1:])
         return inp, target
 
+    def read_sdf_file(self, path, fields_to_read):
+        raise NotImplementedError
+
+    @staticmethod
+    def read_smiles_property_file(path, delimiter=',', keep_header=False ):
+        reader = csv.reader(open(path, 'r'), delimiter=delimiter)
+        data_full = np.array(list(reader))
+        if keep_header:
+            start_position = 0
+        else:
+            start_position = 1
+        assert len(data_full) > start_position
+        smiles = data_full[start_position:, 1]
+        labels = np.array(data_full[start_position:, 2], dtype='float')
+        assert len(smiles) == len(labels)
+        return smiles, labels
+
+    @staticmethod
+    def cross_validation_split(data, labels, n_folds=5, split='random', folds=None):
+        if split not in ['random', 'fixed']:
+            raise ValueError('Invalid value for argument \'split\': must be either \'random\' of \'fixed\'')
+        n = len(data)
+        assert n > 0
+        if split == 'fixed' and folds is None:
+            raise TypeError('Invalid type for argument \'folds\': found None, but must be list')
+        if split == 'random' and folds is not None:
+            raise UserWarning('\'folds\' argument will be ignored: \'split\' set to random, '
+                              'but \'folds\' argument is provided.')
+
+        if split == 'random':
+            fold_len = round(n / n_folds)
+            folds = []
+            for i in range(n_folds):
+                folds = folds + [i]*fold_len
+            if len(folds) > n:
+                folds = folds[:n]
+            if len(folds) < n:
+                folds = folds + [i]*(n - len(folds))
+            assert(len(folds) == n)
+            ind = np.random.permutation(n)
+            new_data = []
+            new_labels = []
+            for i in ind:
+                new_data.append(data[i])
+                new_labels.append(labels[i])
+            data = new_data
+            labels = new_labels
+
+        cross_val_data = []
+        cross_val_labels = []
+        for f in range(n_folds):
+            left = np.where(folds == f)[0].min()
+            right = np.where(folds == f)[0].max()
+            cross_val_data.append(data[left:right + 1])
+            cross_val_labels.append(list(labels[left:right + 1]))
+
+        return cross_val_data, cross_val_labels
+
     @staticmethod
     def time_since(since):
         s = time.time() - since
@@ -114,7 +170,7 @@ class Data(object):
         return tokens, token2idx, num_tokens
 
     @staticmethod
-    def read_smi_file(filename, unique=True, ):
+    def read_smi_file(filename: str, unique: bool = True, ) -> tuple:
         """
         Reads SMILES from file. File must contain one SMILES string per line
         with \n token in the end of the line.
@@ -170,7 +226,8 @@ class Data(object):
             Args:
                 smiles (list): list of SMILES strings
                 sanitize (bool): parameter specifying whether to sanitize SMILES or not.
-                For definition of sanitized SMILES check http://www.rdkit.org/docs/api/rdkit.Chem.rdmolops-module.html#SanitizeMol
+                For definition of sanitized SMILES check
+                http://www.rdkit.org/docs/api/rdkit.Chem.rdmolops-module.html#SanitizeMol
 
             Output:
                 new_smiles (list): list of canonical SMILES and NaNs if SMILES string is invalid or unsanitized
@@ -211,3 +268,21 @@ class Data(object):
             except UserWarning('Unsanitized SMILES string: ' + sm):
                 new_smiles.append(np.nan)
         return new_smiles
+
+    @staticmethod
+    def mol2image(x: str, n: int = 2048) -> object:
+        try:
+            m = Chem.MolFromSmiles(x)
+            fp = Chem.RDKFingerprint(m, maxPath=4, fpSize=n)
+            res = np.zeros(len(fp))
+            DataStructs.ConvertToNumpyArray(fp, res)
+            return res
+        except UserWarning('Unable to calculate Fingerprint'):
+            return [np.nan]
+
+    @staticmethod
+    def get_fp(self, smiles):
+        fp = []
+        for mol in smiles:
+            fp.append(self.mol2image(mol, n=2048))
+        return fp
