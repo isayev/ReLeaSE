@@ -3,15 +3,14 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from data import Data
-
-data = Data()
+import time
 
 
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, stack_width, stack_depth,
                  use_cuda=None, n_layers=1, optimizer=None, lr=0.01):
         super(StackAugmentedRNN, self).__init__()
+
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -112,7 +111,7 @@ class StackAugmentedRNN(nn.Module):
 
         return loss.data[0] / len(inp)
 
-    def evaluate(self, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
+    def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()
         cell = self.init_cell()
         stack = self.initStack()
@@ -139,3 +138,21 @@ class StackAugmentedRNN(nn.Module):
                 break
 
         return predicted
+
+    def fit(self, data, all_losses=[], print_every=100, plot_every=10, ):
+        n_epochs = 3000
+        start = time.time()
+        loss_avg = 0
+
+        for epoch in range(1, n_epochs + 1):
+            loss = self.train_step(data.random_training_set())
+            loss_avg += loss
+
+            if epoch % print_every == 0:
+                print('[%s (%d %d%%) %.4f]' % (data.time_since(start), epoch, epoch / n_epochs * 100, loss))
+                print(self.evaluate('<', 100), '\n')
+
+            if epoch % plot_every == 0:
+                all_losses.append(loss_avg / plot_every)
+                loss_avg = 0
+        return all_losses
