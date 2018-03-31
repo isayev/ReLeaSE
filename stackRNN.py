@@ -8,7 +8,7 @@ import time
 
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, stack_width, stack_depth,
-                 use_cuda=None, n_layers=1, optimizer=None, lr=0.01):
+                 use_cuda=None, n_layers=1, optimizer='Adadelta', lr=0.01):
         super(StackAugmentedRNN, self).__init__()
 
         self.input_size = input_size
@@ -37,8 +37,10 @@ class StackAugmentedRNN(nn.Module):
         self.criterion = nn.CrossEntropyLoss()
         self.lr = lr
         self.optimizer = optimizer
-        if self.optimizer is None:
+        if self.optimizer == 'Adadelta':
             self.optimizer = torch.optim.Adadelta(self.decoder.parameters(), lr=lr)
+        else:
+            raise NotImplementedError(self.optimizer + ' is not implemented. Use \'Adadelta\' instead')
 
     def change_lr(self, new_lr):
         # ADD CUSTOM OPTIMIZER
@@ -139,8 +141,7 @@ class StackAugmentedRNN(nn.Module):
 
         return predicted
 
-    def fit(self, data, all_losses=[], print_every=100, plot_every=10, ):
-        n_epochs = 3000
+    def fit(self, data, n_epochs, all_losses=[], print_every=100, plot_every=10, ):
         start = time.time()
         loss_avg = 0
 
