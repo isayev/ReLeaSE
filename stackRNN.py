@@ -5,6 +5,8 @@ import torch.nn.functional as F
 
 import time
 
+from data import time_since
+
 
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, stack_width, stack_depth,
@@ -154,7 +156,7 @@ class StackAugmentedRNN(nn.Module):
             loss_avg += loss
 
             if epoch % print_every == 0:
-                print('[%s (%d %d%%) %.4f]' % (data.time_since(start), epoch, epoch / n_epochs * 100, loss))
+                print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / n_epochs * 100, loss))
                 print(self.evaluate('<', 100), '\n')
 
             if epoch % plot_every == 0:
