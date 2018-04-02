@@ -7,6 +7,8 @@ from sklearn.ensemble import RandomForestRegressor as RFC
 from sklearn.externals import joblib
 from sklearn import metrics
 
+from data import get_fp
+
 
 class RandomForestQSAR(object):
     def __init__(self, n_estimators=100, n_ensemble=5):
@@ -35,16 +37,16 @@ class RandomForestQSAR(object):
             test_sm = cross_val_data[i]
             train_labels = np.concatenate(cross_val_labels[:i] + cross_val_labels[(i + 1):])
             test_labels = cross_val_labels[i]
-            fp_train = data.get_fp(train_sm)
-            fp_test = data.get_fp(test_sm)
+            fp_train = get_fp(train_sm)
+            fp_test = get_fp(test_sm)
             self.classifiers[i].fit(fp_train, train_labels.ravel())
             predicted = self.classifiers[i].predict(fp_test)
             fpr, tpr, thresholds = metrics.roc_curve(test_labels, predicted)
             auc.append(metrics.auc(fpr, tpr))
         return auc
 
-    def predict(self, data, smiles, average=True):
-        fps = data.get_fp(smiles)
+    def predict(self, smiles, average=True):
+        fps = get_fp(smiles)
         assert len(smiles) == len(fps)
         clean_smiles = []
         clean_fps = []
