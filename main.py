@@ -10,7 +10,7 @@ from ReplayMemory import ReplayMemory
 
 def main():
     gen_data_path = '/data/masha/generative_model/chembl_22_clean_1576904_sorted_std_final.smi'
-    egfr_data_path = ''
+    egfr_data_path = '/home/mariewelt/Notebooks/PyTorch/data/egfr_with_pibchem.smi'
     use_cuda = True
     hidden_size = 500
     stack_width = 100
