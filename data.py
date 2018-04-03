@@ -105,14 +105,14 @@ class PredictorData(object):
         self.binary_labels = np.array(self.property >= threshold, dtype='int32')
 
 
-def get_fp(self, smiles):
+def get_fp(smiles):
     fp = []
     for mol in smiles:
         fp.append(mol2image(mol, n=2048))
     return fp
 
 
-def mol2image(x: str, n: int = 2048) -> object:
+def mol2image(x, n: int = 2048):
     try:
         m = Chem.MolFromSmiles(x)
         fp = Chem.RDKFingerprint(m, maxPath=4, fpSize=n)
