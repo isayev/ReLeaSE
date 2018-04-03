@@ -38,11 +38,11 @@ class StackAugmentedRNN(nn.Module):
 
         self.criterion = nn.CrossEntropyLoss()
         self.lr = lr
+        self.optimizer = optimizer
         optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'RMSprop', 'SGD']
         if self.optimizer not in optimizers:
             raise ValueError(self.optimizer + ' is invalid value for argument \'optimizer\'. Choose one from:'
                              + ', '.join(optimizers))
-        self.optimizer = optimizer
         if self.optimizer == 'Adadelta':
             self.optimizer = torch.optim.Adadelta(self.decoder.parameters(), lr=lr)
         else:
