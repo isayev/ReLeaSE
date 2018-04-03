@@ -47,9 +47,9 @@ for i in range(len(egfr_data.smiles)):
 for _ in range(10):
     RL.policy_gradient_replay(gen_data, replay)
 
-predicted = my_generator.evaluate(gen_data)
-for sm in predicted:
-    print(sm)
+for _ in range(10):
+    generated = my_generator.evaluate(gen_data, )
+    print(generated)
 
 
 
