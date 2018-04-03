@@ -112,7 +112,7 @@ def get_fp(smiles):
     return fp
 
 
-def mol2image(x, n: int = 2048):
+def mol2image(x, n=2048):
     try:
         m = Chem.MolFromSmiles(x)
         fp = Chem.RDKFingerprint(m, maxPath=4, fpSize=n)
@@ -196,7 +196,7 @@ def save_smi_to_file(filename, smiles, unique=True):
     return f.closed
 
 
-def read_smi_file(filename: str, unique: bool = True, ) -> tuple:
+def read_smi_file(filename, unique=True):
     """
     Reads SMILES from file. File must contain one SMILES string per line
     with \n token in the end of the line.
