@@ -126,7 +126,7 @@ class StackAugmentedRNN(nn.Module):
     def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()
         cell = self.init_cell()
-        stack = self.initStack()
+        stack = self.init_stack()
         prime_input = data.char_tensor(prime_str)
         predicted = prime_str
 
@@ -145,7 +145,7 @@ class StackAugmentedRNN(nn.Module):
             # Add predicted character to string and use as next input
             predicted_char = data.all_characters[top_i]
             predicted += predicted_char
-            inp = self.char_tensor(predicted_char)
+            inp = data.char_tensor(predicted_char)
             if predicted_char == end_token:
                 break
 

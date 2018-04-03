@@ -29,9 +29,9 @@ class Reinforcement(object):
 
             hidden = self.generator.init_hidden()
             cell = self.generator.init_cell()
-            stack = self.generator.initStack()
+            stack = self.generator.init_stack()
 
-            seq = replay_memory.sample()
+            seq = replay_memory.sample()[0]
             inp = data.char_tensor(seq)
             cur_loss = 0
 
