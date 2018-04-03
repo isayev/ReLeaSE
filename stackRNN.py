@@ -48,6 +48,10 @@ class StackAugmentedRNN(nn.Module):
         else:
             raise NotImplementedError(self.optimizer + ' is not implemented. Use \'Adadelta\' instead')
 
+    def load_model(self, path):
+        weights = torch.load(path)
+        self.load_state_dict(weights)
+
     def change_lr(self, new_lr):
         # ADD CUSTOM OPTIMIZER
         """Sets generator optimizer learning rate to new_lr."""
