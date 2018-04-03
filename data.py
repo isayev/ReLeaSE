@@ -95,7 +95,7 @@ class PredictorData(object):
         self.smiles, self.property = read_smiles_property_file(path, delimiter=delimiter)
 
         assert len(self.smiles) == len(self.property)
-        self.all_characters, self.char2idx, self.n_characters = self.tokenize(self.smiles)
+        self.all_characters, self.char2idx, self.n_characters = tokenize(self.smiles)
         self.use_cuda = use_cuda
         if self.use_cuda is None:
             self.use_cuda = torch.cuda.is_available()
@@ -298,7 +298,7 @@ def read_smiles_property_file(path, delimiter=',', keep_header=False):
     else:
         start_position = 1
     assert len(data_full) > start_position
-    smiles = data_full[start_position:, 1]
-    labels = np.array(data_full[start_position:, 2], dtype='float')
+    smiles = data_full[start_position:, 0]
+    labels = np.array(data_full[start_position:, 1], dtype='float')
     assert len(smiles) == len(labels)
     return smiles, labels
