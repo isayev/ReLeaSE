@@ -78,7 +78,7 @@ class Reinforcement(object):
                 # Sample from the network as a multinomial distribution
                 output_dist = output.data.view(-1).div(temperature).exp()
                 top_i = torch.multinomial(output_dist, 1)[0]
-                log_dist = F.log_softmax(output)
+                log_dist = F.log_softmax(output, dim=self.data.n_characters)
                 cur_loss += log_dist[0, top_i]
 
                 # Add predicted character to string and use as next input
