@@ -7,7 +7,6 @@ class Reinforcement(object):
         super(Reinforcement, self).__init__()
         self.generator = generator
         self.predictor = predictor
-        raise NotImplementedError
 
     def get_reward(self, smiles, threshold, invalid_reward=-2.0):
         # Add continuous reward
