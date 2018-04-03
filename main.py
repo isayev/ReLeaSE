@@ -16,6 +16,11 @@ stack_width = 100
 stack_depth = 100
 lr = 0.01
 gen_data = GeneratorData(training_data_path=gen_data_path, use_cuda=use_cuda)
+tokens = ['<', '>', '#', '%', ')', '(', '+', '-', '/', '.', '1', '0', '3', '2', '5', '4', '7',
+          '6', '9', '8', '=', 'A', '@', 'C', 'B', 'F', 'I', 'H', 'O', 'N', 'P', 'S', '[', ']',
+          '\\', 'c', 'e', 'i', 'l', 'o', 'n', 'p', 's', 'r', '\n']
+char2idx = {}
+gen_data.load_dictionary(tokens, char2idx)
 egfr_data = PredictorData(path=egfr_data_path)
 egfr_data.binarize(threshold=7.0)
 print('I am here')
@@ -23,7 +28,11 @@ my_generator = StackAugmentedRNN(input_size=gen_data.n_characters, hidden_size=h
                                  output_size=gen_data.n_characters, stack_width=stack_width,
                                  stack_depth=stack_depth, use_cuda=use_cuda, n_layers=1,
                                  optimizer='Adadelta', lr=lr)
+<<<<<<< HEAD
 my_generator.load_model('/home/mariewelt/Notebooks/PyTorch/Model_checkpoints/generator/policy_gradient_egfr_max')
+=======
+my_generator.load_model('/home/mariewelt/Notebooks/Pytorch/Model_checkpoints/generator/policy_gradient_egfr_max')
+>>>>>>> 4f326dd28e5f18e7f98ffac9fd99f10381c53d54
 
 egfr_predictor = RandomForestQSAR(n_estimators=100, n_ensemble=5)
 egfr_predictor.load_model('/home/mariewelt/Notebooks/PyTorch/data/RF/EGFR_RF')

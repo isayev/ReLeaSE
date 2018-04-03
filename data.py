@@ -29,6 +29,11 @@ class GeneratorData(object):
         if self.use_cuda is None:
             self.use_cuda = torch.cuda.is_available()
 
+    def load_dictionary(self, tokens, char2idx):
+        self.all_characters = tokens
+        self.char2idx = char2idx
+        self.n_characters = len(tokens)
+
     def push_to_replay_memory(self, smiles):
         """
         Pushes new SMILES to replay memory. Works as queue: first come, first go.
