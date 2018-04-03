@@ -37,7 +37,9 @@ def main():
     for _ in range(10):
         RL.policy_gradient_replay(gen_data, replay)
 
-    my_generator.evaluate(gen_data)
+    predicted = my_generator.evaluate(gen_data)
+    for sm in predicted:
+        print(sm)
 
 
 
