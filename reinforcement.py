@@ -38,7 +38,7 @@ class Reinforcement(object):
             for p in range(len(inp)-1):
                 output, hidden, cell, stack = self.generator(inp[p], hidden, cell, stack)
                 top_i = inp.data[p+1]
-                log_dist = F.log_softmax(output, dim=self.data.n_characters)
+                log_dist = F.log_softmax(output, dim=1)
                 cur_loss += log_dist[0, top_i]
                 if seq[p+1] == '>':
                     reward = self.get_reward(seq[1:-1])

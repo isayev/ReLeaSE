@@ -63,7 +63,7 @@ class StackAugmentedRNN(nn.Module):
         inp = self.encoder(inp.view(1, -1))
         hidden_2_stack = torch.cat((hidden[0], hidden[1]), dim=1)
         stack_controls = self.stack_controls_layer(hidden_2_stack)
-        stack_controls = F.softmax(stack_controls)
+        stack_controls = F.softmax(stack_controls, dim=1)
         stack_input = self.stack_input_layer(hidden_2_stack.unsqueeze(0))
         stack_input = F.tanh(stack_input)
         stack = self.stack_augmentation(stack_input.permute(1, 0, 2),

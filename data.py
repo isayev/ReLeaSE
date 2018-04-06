@@ -6,6 +6,7 @@ import time
 import math
 import numpy as np
 import csv
+import warnings
 
 from rdkit import Chem
 from rdkit import DataStructs
@@ -44,7 +45,7 @@ class GeneratorData(object):
         new_smiles = canonize_smiles(smiles)
         new_smiles = list(set(new_smiles))
         for sm in new_smiles:
-            if not np.isnan(sm):
+            if sm is not None:
                 self.replay_memory.append(sm)
         if len(self.replay_memory > self.replay_capacity):
             self.replay_memory = self.replay_memory[-self.replay_capacity:]
@@ -124,7 +125,8 @@ def mol2image(x, n=2048):
         res = np.zeros(len(fp))
         DataStructs.ConvertToNumpyArray(fp, res)
         return res
-    except UserWarning('Unable to calculate Fingerprint'):
+    except:
+        warnings.warn('Unable to calculate Fingerprint', UserWarning)
         return [np.nan]
 
 
@@ -149,8 +151,9 @@ def sanitize_smiles(smiles, canonize=True):
                 new_smiles.append(Chem.MolToSmiles(Chem.MolFromSmiles(sm, sanitize=True)))
             else:
                 new_smiles.append(sm)
-        except UserWarning('Unsanitized SMILES string: ' + sm):
-            new_smiles.append(np.nan)
+        except: 
+            warnings.warn('Unsanitized SMILES string: ' + sm, UserWarning)
+            new_smiles.append(None)
     return new_smiles
 
 
@@ -173,8 +176,9 @@ def canonize_smiles(smiles, sanitize=True):
     for sm in smiles:
         try:
             new_smiles.append(Chem.MolToSmiles(Chem.MolFromSmiles(sm, sanitize=sanitize)))
-        except UserWarning(sm + ' can not be canonized: invalid SMILES string!'):
-            new_smiles.append(np.nan)
+        except:
+            warnings.warn(sm + ' can not be canonized: invalid SMILES string!', UserWarning)
+            new_smiles.append(None)
     return new_smiles
 
 
@@ -262,8 +266,8 @@ def cross_validation_split(data, labels, n_folds=5, split='random', folds=None):
     if split == 'fixed' and folds is None:
         raise TypeError('Invalid type for argument \'folds\': found None, but must be list')
     if split == 'random' and folds is not None:
-        raise UserWarning('\'folds\' argument will be ignored: \'split\' set to random, '
-                          'but \'folds\' argument is provided.')
+        warnings.warn('\'folds\' argument will be ignored: \'split\' set to random, '
+                          'but \'folds\' argument is provided.', UserWarning)
 
     if split == 'random':
         fold_len = round(n / n_folds)
