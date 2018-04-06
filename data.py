@@ -96,9 +96,9 @@ class GeneratorData(object):
 
 
 class PredictorData(object):
-    def __init__(self, path, delimiter=',', use_cuda=None):
+    def __init__(self, path, delimiter=',', cols=[0, 1], use_cuda=None):
         super(PredictorData, self).__init__()
-        self.smiles, self.property = read_smiles_property_file(path, delimiter=delimiter)
+        self.smiles, self.property = read_smiles_property_file(path, delimiter=delimiter, cols=cols)
 
         assert len(self.smiles) == len(self.property)
         self.all_characters, self.char2idx, self.n_characters = tokenize(self.smiles)
@@ -299,7 +299,7 @@ def cross_validation_split(data, labels, n_folds=5, split='random', folds=None):
     return cross_val_data, cross_val_labels
 
 
-def read_smiles_property_file(path, delimiter=',', keep_header=False):
+def read_smiles_property_file(path, delimiter=',', cols = [0, 1], keep_header=False):
     reader = csv.reader(open(path, 'r'), delimiter=delimiter)
     data_full = np.array(list(reader))
     if keep_header:
@@ -307,7 +307,7 @@ def read_smiles_property_file(path, delimiter=',', keep_header=False):
     else:
         start_position = 1
     assert len(data_full) > start_position
-    smiles = data_full[start_position:, 0]
-    labels = np.array(data_full[start_position:, 1], dtype='float')
+    smiles = data_full[start_position:, cols[0]]
+    labels = np.array(data_full[start_position:, cols[1]], dtype='float')
     assert len(smiles) == len(labels)
     return smiles, labels
