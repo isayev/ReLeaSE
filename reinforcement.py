@@ -10,16 +10,15 @@ class Reinforcement(object):
 
     def get_reward(self, smiles, threshold, invalid_reward=-2.0):
         # Add continuous reward
-        tmp, nan_smiles = self.predictor.predict([smiles])
+        mol, prop, nan_smiles = self.predictor.predict([smiles])
         if len(nan_smiles) == 1:
             return invalid_reward
-        prop = tmp[0, 1]
-        if prop >= threshold:
+        if prop[0] >= threshold:
             return 1.0
         else:
             return -1.0
 
-    def policy_gradient_replay(self, data, replay_memory, n_batch=100):
+    def policy_gradient_replay(self, data, replay_memory, threshold, n_batch=100):
 
         rl_loss = 0
         reward = 0
@@ -41,7 +40,7 @@ class Reinforcement(object):
                 log_dist = F.log_softmax(output, dim=1)
                 cur_loss += log_dist[0, top_i]
                 if seq[p+1] == '>':
-                    reward = self.get_reward(seq[1:-1])
+                    reward = self.get_reward(seq[1:-1],  threshold)
 
             rl_loss += cur_loss * reward
             n_samples += 1
@@ -52,7 +51,7 @@ class Reinforcement(object):
 
         return rl_loss.data[0]
 
-    def policy_gradient(self, data, prime_str='<', end_token='>', predict_len=200, temperature=0.8, n_batch=100):
+    def policy_gradient(self, data,  threshold, prime_str='<', end_token='>', predict_len=200, temperature=0.8, n_batch=100):
 
         rl_loss = 0
         reward = 0
@@ -62,7 +61,7 @@ class Reinforcement(object):
 
             hidden = self.generator.init_hidden()
             cell = self.generator.init_cell()
-            stack = self.generator.initStack()
+            stack = self.generator.init_stack()
             prime_input = data.char_tensor(prime_str)
             predicted = prime_str
 
@@ -78,7 +77,7 @@ class Reinforcement(object):
                 # Sample from the network as a multinomial distribution
                 output_dist = output.data.view(-1).div(temperature).exp()
                 top_i = torch.multinomial(output_dist, 1)[0]
-                log_dist = F.log_softmax(output, dim=self.data.n_characters)
+                log_dist = F.log_softmax(output, dim=1)
                 cur_loss += log_dist[0, top_i]
 
                 # Add predicted character to string and use as next input
@@ -87,7 +86,7 @@ class Reinforcement(object):
                 inp = data.char_tensor(predicted_char)
 
                 if predicted_char == end_token:
-                    reward = self.get_reward(predicted[1:-1])
+                    reward = self.get_reward(predicted[1:-1], threshold)
                 else:
                     reward = -10
 
