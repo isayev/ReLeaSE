@@ -96,6 +96,7 @@ class GeneratorData(object):
         
     def update_data(self, path):
         self.file, success = read_smi_file(path, unique=True)
+        self.file_len = len(self.file)
         assert success
     
 
