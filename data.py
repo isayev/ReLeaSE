@@ -66,7 +66,7 @@ class GeneratorData(object):
         Returns:
             random_smiles (str).
         """
-        index = random.randint(0, self.file_len)
+        index = random.randint(0, self.file_len-1)
         return self.file[index]
 
     def char_tensor(self, string):
@@ -93,6 +93,11 @@ class GeneratorData(object):
 
     def read_sdf_file(self, path, fields_to_read):
         raise NotImplementedError
+        
+    def update_data(self, path):
+        self.file, success = read_smi_file(path, unique=True)
+        assert success
+    
 
 
 class PredictorData(object):
@@ -153,7 +158,7 @@ def sanitize_smiles(smiles, canonize=True):
                 new_smiles.append(sm)
         except: 
             warnings.warn('Unsanitized SMILES string: ' + sm, UserWarning)
-            new_smiles.append(None)
+            new_smiles.append('')
     return new_smiles
 
 
@@ -178,7 +183,7 @@ def canonize_smiles(smiles, sanitize=True):
             new_smiles.append(Chem.MolToSmiles(Chem.MolFromSmiles(sm, sanitize=sanitize)))
         except:
             warnings.warn(sm + ' can not be canonized: invalid SMILES string!', UserWarning)
-            new_smiles.append(None)
+            new_smiles.append('')
     return new_smiles
 
 
@@ -287,9 +292,10 @@ def cross_validation_split(data, labels, n_folds=5, split='random', folds=None):
             new_labels.append(labels[i])
         data = new_data
         labels = new_labels
-
+    
     cross_val_data = []
     cross_val_labels = []
+    folds = np.array(folds)
     for f in range(n_folds):
         left = np.where(folds == f)[0].min()
         right = np.where(folds == f)[0].max()
