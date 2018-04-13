@@ -111,7 +111,7 @@ class StackAugmentedRNN(nn.Module):
     def train_step(self, inp, target):
         hidden = self.init_hidden()
         cell = self.init_cell()
-        stack = self.initStack()
+        stack = self.init_stack()
         self.zero_grad()
         loss = 0
         for c in range(len(inp)):
@@ -156,12 +156,13 @@ class StackAugmentedRNN(nn.Module):
         loss_avg = 0
 
         for epoch in range(1, n_epochs + 1):
-            loss = self.train_step(data.random_training_set())
+            inp, target = data.random_training_set()
+            loss = self.train_step(inp, target)
             loss_avg += loss
 
             if epoch % print_every == 0:
                 print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / n_epochs * 100, loss))
-                print(self.evaluate('<', 100), '\n')
+                print(self.evaluate(data=data, prime_str = '<', predict_len=100), '\n')
 
             if epoch % plot_every == 0:
                 all_losses.append(loss_avg / plot_every)
