@@ -183,7 +183,7 @@ class StackAugmentedGRU(nn.Module):
         self.stack_width = stack_width
         self.stack_depth = stack_depth
         self.has_cell = False
-        self.stack = True
+        self.has_stack = True
 
         self.use_cuda = use_cuda
         if self.use_cuda is None:
