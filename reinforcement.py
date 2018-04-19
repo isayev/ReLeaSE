@@ -23,6 +23,7 @@ class Reinforcement(object):
         rl_loss = 0
         reward = 0
         n_samples = 0
+        self.generator.optimizer.zero_grad()
 
         for _ in range(n_batch):
 
@@ -65,7 +66,8 @@ class Reinforcement(object):
         rl_loss = 0
         reward = 0
         n_samples = 0
-
+        self.generator.optimizer.zero_grad()
+        
         for _ in range(n_batch):
 
             hidden = self.generator.init_hidden()
