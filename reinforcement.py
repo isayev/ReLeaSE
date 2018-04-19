@@ -27,15 +27,24 @@ class Reinforcement(object):
         for _ in range(n_batch):
 
             hidden = self.generator.init_hidden()
-            cell = self.generator.init_cell()
-            stack = self.generator.init_stack()
+            if self.generator.has_cell:
+                cell = self.generator.init_cell()
+            if self.generator.has_stack:
+                stack = self.generator.init_stack()
 
             seq = replay_memory.sample()[0]
             inp = data.char_tensor(seq)
             cur_loss = 0
 
             for p in range(len(inp)-1):
-                output, hidden, cell, stack = self.generator(inp[p], hidden, cell, stack)
+                if self.generator.has_stack and self.generator.has_cell:
+                    output, hidden, cell, stack = self.generator(inp[p], hidden, cell, stack)
+                elif self.generator.has_stack and not self.generator.has_cell:
+                    output, hidden, stack = self.generator(inp[p], hidden, stack)
+                elif not self.generator.has_stack and self.generator.has_cell:
+                    output, hidden, cell = self.generator(inp[p], hidden, cell)
+                elif not self.generator.has_stack and not self.generator.has_cell:
+                    output, hidden = self.generator(inp[p], hidden)
                 top_i = inp.data[p+1]
                 log_dist = F.log_softmax(output, dim=1)
                 cur_loss += log_dist[0, top_i]
@@ -60,19 +69,37 @@ class Reinforcement(object):
         for _ in range(n_batch):
 
             hidden = self.generator.init_hidden()
-            cell = self.generator.init_cell()
-            stack = self.generator.init_stack()
+            if self.generator.has_cell:
+                cell = self.generator.init_cell()
+            if self.generator.has_stack:
+                stack = self.generator.init_stack()
+
             prime_input = data.char_tensor(prime_str)
             predicted = prime_str
 
             # Use priming string to "build up" hidden state
             for p in range(len(prime_str)):
-                _, hidden, cell, stack = self.generator(prime_input[p], hidden, cell, stack)
+                if self.generator.has_stack and self.generator.has_cell:
+                    _, hidden, cell, stack = self.generator(prime_input[p], hidden, cell, stack)
+                elif self.generator.has_stack and not self.generator.has_cell:
+                    _, hidden, stack = self.generator(prime_input[p], hidden, stack)
+                elif not self.generator.has_stack and self.generator.has_cell:
+                    _, hidden, cell = self.generator(prime_input[p], hidden, cell)
+                elif not self.generator.has_stack and not self.generator.has_cell:
+                    _, hidden = self.generator(prime_input[p], hidden)
             inp = prime_input[-1]
 
             cur_loss = 0
             for p in range(predict_len):
-                output, hidden, cell, stack = self.generator(inp, hidden, cell, stack)
+
+                if self.generator.has_stack and self.generator.has_cell:
+                    output, hidden, cell, stack = self.generator(inp, hidden, cell, stack)
+                elif self.generator.has_stack and not self.generator.has_cell:
+                    output, hidden, stack = self.generator(inp, hidden, stack)
+                elif not self.generator.has_stack and self.generator.has_cell:
+                    output, hidden, cell = self.generator(inp, hidden, cell)
+                elif not self.generator.has_stack and not self.generator.has_cell:
+                    output, hidden = self.generator(inp, hidden)
 
                 # Sample from the network as a multinomial distribution
                 output_dist = output.data.view(-1).div(temperature).exp()
