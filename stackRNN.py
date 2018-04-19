@@ -187,15 +187,15 @@ class StackAugmentedGRU(nn.Module):
 
         self.n_layers = n_layers
 
-        self.stack_controls_layer = nn.Linear(in_features=self.hidden_size * 2,
+        self.stack_controls_layer = nn.Linear(in_features=self.hidden_size,
                                               out_features=3)
 
-        self.stack_input_layer = nn.Linear(in_features=self.hidden_size * 2,
+        self.stack_input_layer = nn.Linear(in_features=self.hidden_size,
                                            out_features=self.stack_width)
 
         self.encoder = nn.Embedding(input_size, hidden_size)
-        self.rnn = nn.GRU(hidden_size + stack_width, hidden_size, n_layers)
-        self.decoder = nn.Linear(hidden_size * 2, output_size)
+        self.gru = nn.GRU(hidden_size + stack_width, hidden_size, n_layers)
+        self.decoder = nn.Linear(hidden_size, output_size)
 
         self.criterion = nn.CrossEntropyLoss()
         self.lr = lr
@@ -230,7 +230,7 @@ class StackAugmentedGRU(nn.Module):
                                         stack, stack_controls)
         stack_top = stack[:, 0, :].unsqueeze(0)
         input = torch.cat((inp, stack_top), dim=2)
-        output, hidden = self.rnn(input.view(1, 1, -1), hidden)
+        output, hidden = self.gru(input.view(1, 1, -1), hidden)
         output = self.decoder(output.view(1, -1))
         return output, hidden, stack
 
@@ -246,14 +246,16 @@ class StackAugmentedGRU(nn.Module):
         a_push, a_pop, a_no_op = controls[:, 0], controls[:, 1], controls[:, 2]
         stack_down = torch.cat((prev_stack[:, 1:], zeros_at_the_bottom), dim=1)
         stack_up = torch.cat((input_val, prev_stack[:, :-1]), dim=1)
-        new_stack = a_no_op * prev_stack + a_push * stack_up + a_pop * stack_down
+        new_stack = a_no_op * prev_stack 
+        new_stack = new_stack + a_push * stack_up 
+        new_stack = new_stack + a_pop * stack_down
         return new_stack
 
     def init_hidden(self):
         if self.use_cuda:
-            return Variable(torch.zeros(self.n_layers * 2, 1, self.hidden_size).cuda())
+            return Variable(torch.zeros(self.n_layers, 1, self.hidden_size).cuda())
         else:
-            return Variable(torch.zeros(self.n_layers * 2, 1, self.hidden_size))
+            return Variable(torch.zeros(self.n_layers , 1, self.hidden_size))
 
     def init_stack(self):
         result = torch.zeros(1, self.stack_depth, self.stack_width)
