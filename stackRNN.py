@@ -13,6 +13,8 @@ class StackAugmentedRNN(nn.Module):
                  use_cuda=None, n_layers=1, optimizer='Adadelta', lr=0.01):
         super(StackAugmentedRNN, self).__init__()
 
+        self.has_cell = True
+        self.stack = True
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -180,6 +182,8 @@ class StackAugmentedGRU(nn.Module):
         self.output_size = output_size
         self.stack_width = stack_width
         self.stack_depth = stack_depth
+        self.has_cell = False
+        self.stack = True
 
         self.use_cuda = use_cuda
         if self.use_cuda is None:
@@ -323,6 +327,7 @@ class StackAugmentedGRU(nn.Module):
                 loss_avg = 0
         return all_losses
 
+
 class VanillaGRU(nn.Module):
     def __init__(self, input_size, hidden_size, output_size,
                  use_cuda=None, n_layers=1, optimizer='Adadelta', lr=0.01):
@@ -331,6 +336,8 @@ class VanillaGRU(nn.Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
+        self.has_cell = False
+        self.has_stack = False
 
         self.use_cuda = use_cuda
         if self.use_cuda is None:
