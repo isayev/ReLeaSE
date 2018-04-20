@@ -100,7 +100,6 @@ class GeneratorData(object):
         self.file, success = read_smi_file(path, unique=True)
         self.file_len = len(self.file)
         assert success
-    
 
 
 class PredictorData(object):
@@ -117,6 +116,11 @@ class PredictorData(object):
 
     def binarize(self, threshold):
         self.binary_labels = np.array(self.property >= threshold, dtype='int32')
+
+    def load_dictionary(self, tokens, char2idx):
+        self.all_characters = tokens
+        self.char2idx = char2idx
+        self.n_characters = len(tokens)
 
 
 def get_fp(smiles):
