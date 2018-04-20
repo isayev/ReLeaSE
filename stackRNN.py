@@ -15,7 +15,7 @@ class StackAugmentedRNN(nn.Module):
         super(StackAugmentedRNN, self).__init__()
 
         self.has_cell = True
-        self.stack = True
+        self.has_stack = True
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
