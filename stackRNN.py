@@ -159,8 +159,13 @@ class StackAugmentedRNN(nn.Module):
         start = time.time()
         loss_avg = 0
 
+        if augment:
+            smiles_augmentation = SmilesEnumerator()
+        else:
+            smiles_augmentation = None
+
         for epoch in range(1, n_epochs + 1):
-            inp, target = data.random_training_set(augment)
+            inp, target = data.random_training_set(smiles_augmentation)
             loss = self.train_step(inp, target)
             loss_avg += loss
 
@@ -315,8 +320,13 @@ class StackAugmentedGRU(nn.Module):
         start = time.time()
         loss_avg = 0
 
+        if augment:
+            smiles_augmentation = SmilesEnumerator()
+        else:
+            smiles_augmentation = None
+
         for epoch in range(1, n_epochs + 1):
-            inp, target = data.random_training_set(augment)
+            inp, target = data.random_training_set(smiles_augmentation)
             loss = self.train_step(inp, target)
             loss_avg += loss
 
