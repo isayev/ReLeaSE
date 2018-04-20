@@ -85,8 +85,10 @@ class GeneratorData(object):
         else:
             return Variable(tensor)
 
-    def random_training_set(self):
+    def random_training_set(self, smiles_augmentation):
         chunk = self.random_chunk()
+        if smiles_augmentation is not None:
+            chunk = smiles_augmentation.randomize_smiles(chunk)
         inp = self.char_tensor(chunk[:-1])
         target = self.char_tensor(chunk[1:])
         return inp, target

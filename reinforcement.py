@@ -129,5 +129,5 @@ class Reinforcement(object):
 
         return rl_loss.data[0]
 
-    def transfer_learning(self, data, n_epochs):
-        _ = self.generator.fit(data, n_epochs)
+    def transfer_learning(self, data, n_epochs, augment=False):
+        _ = self.generator.fit(data, n_epochs, augment=augment)
