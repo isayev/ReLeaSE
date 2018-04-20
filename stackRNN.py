@@ -9,6 +9,7 @@ from data import time_since
 
 from SmilesEnumerator import SmilesEnumerator
 
+
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, stack_width, stack_depth,
                  use_cuda=None, n_layers=1, optimizer='Adadelta', lr=0.01):
@@ -154,12 +155,12 @@ class StackAugmentedRNN(nn.Module):
 
         return predicted
 
-    def fit(self, data, n_epochs, all_losses=[], print_every=100, plot_every=10):
+    def fit(self, data, n_epochs, all_losses=[], print_every=100, plot_every=10, augment=False):
         start = time.time()
         loss_avg = 0
 
         for epoch in range(1, n_epochs + 1):
-            inp, target = data.random_training_set()
+            inp, target = data.random_training_set(augment)
             loss = self.train_step(inp, target)
             loss_avg += loss
 
@@ -310,12 +311,12 @@ class StackAugmentedGRU(nn.Module):
 
         return predicted
 
-    def fit(self, data, n_epochs, all_losses=[], print_every=100, plot_every=10, ):
+    def fit(self, data, n_epochs, all_losses=[], print_every=100, plot_every=10, augment=False):
         start = time.time()
         loss_avg = 0
 
         for epoch in range(1, n_epochs + 1):
-            inp, target = data.random_training_set()
+            inp, target = data.random_training_set(augment)
             loss = self.train_step(inp, target)
             loss_avg += loss
 
