@@ -22,6 +22,8 @@ class StackAugmentedRNN(nn.Module):
         self.output_size = output_size
         self.stack_width = stack_width
         self.stack_depth = stack_depth
+        self.has_cell = True
+        self.has_stack = True
 
         self.use_cuda = use_cuda
         if self.use_cuda is None:
@@ -48,7 +50,7 @@ class StackAugmentedRNN(nn.Module):
             raise ValueError(self.optimizer + ' is invalid value for argument \'optimizer\'. Choose one from:'
                              + ', '.join(optimizers))
         if self.optimizer == 'Adadelta':
-            self.optimizer = torch.optim.Adadelta(self.decoder.parameters(), lr=lr)
+            self.optimizer = torch.optim.Adadelta(self.parameters(), lr=lr)
         else:
             raise NotImplementedError(self.optimizer + ' is not implemented. Use \'Adadelta\' instead')
 
@@ -116,7 +118,7 @@ class StackAugmentedRNN(nn.Module):
         hidden = self.init_hidden()
         cell = self.init_cell()
         stack = self.init_stack()
-        self.zero_grad()
+        self.optimizer.zero_grad()
         loss = 0
         for c in range(len(inp)):
             output, hidden, cell, stack = self(inp[c], hidden, cell, stack)
@@ -216,7 +218,7 @@ class StackAugmentedGRU(nn.Module):
             raise ValueError(self.optimizer + ' is invalid value for argument \'optimizer\'. Choose one from:'
                              + ', '.join(optimizers))
         if self.optimizer == 'Adadelta':
-            self.optimizer = torch.optim.Adadelta(self.decoder.parameters(), lr=lr)
+            self.optimizer = torch.optim.Adadelta(self.parameters(), lr=lr)
         else:
             raise NotImplementedError(self.optimizer + ' is not implemented. Use \'Adadelta\' instead')
 
@@ -369,7 +371,7 @@ class VanillaGRU(nn.Module):
             raise ValueError(self.optimizer + ' is invalid value for argument \'optimizer\'. Choose one from:'
                              + ', '.join(optimizers))
         if self.optimizer == 'Adadelta':
-            self.optimizer = torch.optim.Adadelta(self.decoder.parameters(), lr=lr)
+            self.optimizer = torch.optim.Adadelta(self.parameters(), lr=lr)
         else:
             raise NotImplementedError(self.optimizer + ' is not implemented. Use \'Adadelta\' instead')
 
@@ -397,7 +399,7 @@ class VanillaGRU(nn.Module):
 
     def train_step(self, inp, target):
         hidden = self.init_hidden()
-        self.zero_grad()
+        self.optimizer.zero_grad()
         loss = 0
         for c in range(len(inp)):
             output, hidden = self(inp[c], hidden)
