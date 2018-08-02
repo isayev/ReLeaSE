@@ -10,6 +10,8 @@ This is a PyTorch implementation of Deep Reinforcement Learning for de-novo Drug
 * PyTorch 0.4 [https://pytorch.org](https://pytorch.org)
 * Modern NVIDIA GPU, [compute capability 3.5](https://developer.nvidia.com/cuda-gpus) of newer.
 * [CUDA 9.0](https://developer.nvidia.com/cuda-downloads)
+* scikit-learn (http://scikit-learn.org/)
+* rdkit (http://www.rdkit.org/)
 
 ## Installation
 Clone this repository into desired folder and install dependencies. 
