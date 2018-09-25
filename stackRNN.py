@@ -58,6 +58,9 @@ class StackAugmentedRNN(nn.Module):
         weights = torch.load(path)
         self.load_state_dict(weights)
 
+    def save_model(self, path):
+        torch.save(self.state_dict(), path)
+
     def change_lr(self, new_lr):
         # ADD CUSTOM OPTIMIZER
         """Sets generator optimizer learning rate to new_lr."""
@@ -122,7 +125,7 @@ class StackAugmentedRNN(nn.Module):
         loss = 0
         for c in range(len(inp)):
             output, hidden, cell, stack = self(inp[c], hidden, cell, stack)
-            loss += self.criterion(output, target[c])
+            loss += self.criterion(output, target[c].unsqueeze(0))
 
         loss.backward()
         self.optimizer.step()
@@ -226,6 +229,9 @@ class StackAugmentedGRU(nn.Module):
         weights = torch.load(path)
         self.load_state_dict(weights)
 
+    def save_model(self, path):
+        torch.save(self.state_dict(), path)
+
     def change_lr(self, new_lr):
         # ADD CUSTOM OPTIMIZER
         """Sets generator optimizer learning rate to new_lr."""
@@ -238,7 +244,7 @@ class StackAugmentedGRU(nn.Module):
         stack_controls = self.stack_controls_layer(hidden.squeeze(0))
         stack_controls = F.softmax(stack_controls, dim=1)
         stack_input = self.stack_input_layer(hidden)
-        stack_input = F.tanh(stack_input)
+        stack_input = torch.tanh(stack_input)
         stack = self.stack_augmentation(stack_input.permute(1, 0, 2),
                                         stack, stack_controls)
         stack_top = stack[:, 0, :].unsqueeze(0)
@@ -284,12 +290,12 @@ class StackAugmentedGRU(nn.Module):
         loss = 0
         for c in range(len(inp)):
             output, hidden, stack = self(inp[c], hidden, stack)
-            loss += self.criterion(output, target[c])
+            loss += self.criterion(output, target[c].unsqueeze(0))
 
         loss.backward()
         self.optimizer.step()
 
-        return loss.data[0] / len(inp)
+        return loss.item() / len(inp)
 
     def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()
@@ -379,6 +385,9 @@ class VanillaGRU(nn.Module):
         weights = torch.load(path)
         self.load_state_dict(weights)
 
+    def save_model(self, path):
+        torch.save(self.state_dict(), path)
+
     def change_lr(self, new_lr):
         # ADD CUSTOM OPTIMIZER
         """Sets generator optimizer learning rate to new_lr."""
@@ -403,12 +412,12 @@ class VanillaGRU(nn.Module):
         loss = 0
         for c in range(len(inp)):
             output, hidden = self(inp[c], hidden)
-            loss += self.criterion(output, target[c])
+            loss += self.criterion(output, target[c].unsqueeze(0))
 
         loss.backward()
         self.optimizer.step()
 
-        return loss.data[0] / len(inp)
+        return loss.item() / len(inp)
 
     def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()
