@@ -130,7 +130,7 @@ class StackAugmentedRNN(nn.Module):
         loss.backward()
         self.optimizer.step()
 
-        return loss.data[0] / len(inp)
+        return loss.item() / len(inp)
 
     def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()

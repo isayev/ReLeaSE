@@ -58,7 +58,6 @@ class Reinforcement(object):
         rl_loss = -rl_loss / n_samples
         rl_loss.backward()
         self.generator.optimizer.step()
-
         return rl_loss.item()
 
     def policy_gradient(self, data,  threshold, prime_str='<', end_token='>', predict_len=200, temperature=0.8, n_batch=100):
@@ -126,7 +125,6 @@ class Reinforcement(object):
         rl_loss = -rl_loss / n_samples
         rl_loss.backward()
         self.generator.optimizer.step()
-
         return rl_loss.item()
 
     def transfer_learning(self, data, n_epochs, augment=False):
