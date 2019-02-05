@@ -8,17 +8,23 @@ class Reinforcement(object):
         self.generator = generator
         self.predictor = predictor
 
-    def get_reward(self, smiles, threshold, invalid_reward=-2.0):
+    def get_reward(self, smiles, threshold, invalid_reward=-2.0, **kwargs):
         # Add continuous reward
-        mol, prop, nan_smiles = self.predictor.predict([smiles])
+        mol, prop, nan_smiles = self.predictor.predict([smiles], **kwargs)
         if len(nan_smiles) == 1:
             return invalid_reward
-        if prop[0] >= threshold:
-            return 1.0
-        else:
-            return -1.0
+        if len(threshold) == 1:
+            if prop[0] >= threshold:
+                return 1.0
+            else:
+                return -1.0
+        elif len(threshold) == 2:
+            if ((prop[0] >= threshold[0]) and (prop[0] <= threshold[1])):
+                return 2.0
+            else:
+                return -2.0
 
-    def policy_gradient_replay(self, data, replay_memory, threshold, n_batch=100):
+    def policy_gradient_replay(self, data, replay_memory, threshold, n_batch=100, **kwargs):
 
         rl_loss = 0
         reward = 0
@@ -50,7 +56,7 @@ class Reinforcement(object):
                 log_dist = F.log_softmax(output, dim=1)
                 cur_loss += log_dist[0, top_i]
                 if seq[p+1] == '>':
-                    reward = self.get_reward(seq[1:-1],  threshold)
+                    reward = self.get_reward(seq[1:-1],  threshold, **kwargs)
 
             rl_loss += cur_loss * reward
             n_samples += 1
@@ -61,7 +67,8 @@ class Reinforcement(object):
 
         return rl_loss.item()
 
-    def policy_gradient(self, data,  threshold, prime_str='<', end_token='>', predict_len=200, temperature=0.8, n_batch=100):
+    def policy_gradient(self, data,  threshold, prime_str='<', end_token='>', 
+                        predict_len=200, temperature=0.8, n_batch=100, **kwargs):
 
         rl_loss = 0
         reward = 0
@@ -80,7 +87,7 @@ class Reinforcement(object):
             predicted = prime_str
 
             # Use priming string to "build up" hidden state
-            for p in range(len(prime_str)):
+            for p in range(len(prime_str)-1):
                 if self.generator.has_stack and self.generator.has_cell:
                     _, hidden, cell, stack = self.generator(prime_input[p], hidden, cell, stack)
                 elif self.generator.has_stack and not self.generator.has_cell:
@@ -115,7 +122,8 @@ class Reinforcement(object):
                 inp = data.char_tensor(predicted_char)
 
                 if predicted_char == end_token:
-                    reward = self.get_reward(predicted[1:-1], threshold)
+                    reward = self.get_reward(predicted[1:-1], threshold, **kwargs)
+                    break
                 else:
                     reward = -10
 
