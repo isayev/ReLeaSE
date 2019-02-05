@@ -11,11 +11,16 @@ import warnings
 from rdkit import Chem
 from rdkit import DataStructs
 
+from sklearn.model_selection import KFold, StratifiedKFold
+
+from mordred import Calculator, descriptors
+
 
 class GeneratorData(object):
     def __init__(self, training_data_path, replay_data=None, replay_capacity=10000, use_cuda=None):
         super(GeneratorData, self).__init__()
-        self.file, success = read_smi_file(training_data_path, unique=True)
+        self.file, success = read_smi_file(training_data_path, unique=True, 
+                                          add_start_end_tokens=True)
 
         assert success
         self.file_len = len(self.file)
@@ -103,31 +108,91 @@ class GeneratorData(object):
 
 
 class PredictorData(object):
-    def __init__(self, path, delimiter=',', cols=[0, 1], use_cuda=None):
+    def __init__(self, path, delimiter=',', cols=[0, 1], get_features=None,
+                 has_label=True, labels_start=1, **kwargs):
         super(PredictorData, self).__init__()
-        self.smiles, self.property = read_smiles_property_file(path, delimiter=delimiter, cols=cols)
-
-        assert len(self.smiles) == len(self.property)
-        self.all_characters, self.char2idx, self.n_characters = tokenize(self.smiles)
-        self.use_cuda = use_cuda
-        if self.use_cuda is None:
-            self.use_cuda = torch.cuda.is_available()
-        self.binary_labels = None
+        data = read_object_property_file(path, delimiter, cols_to_read=cols)
+        if has_label:
+            self.objects = np.array(data[:labels_start]).reshape(-1)
+            self.y = np.array(data[labels_start:], dtype='float32')
+            self.y = self.y.reshape(-1, len(cols) - labels_start)
+            if self.y.shape[1] == 1:
+                self.y = self.y.reshape(-1)
+        else:
+            self.objects = np.array(data[:labels_start]).reshape(-1)
+            self.y = [None]*len(self.object)
+        assert len(self.objects) == len(self.y)
+        if get_features is not None:
+            self.x, processed_indices, invalid_indices = \
+                get_features(self.objects, **kwargs)
+            self.invalid_objects = self.objects[invalid_indices]
+            self.objects = self.objects[processed_indices]
+            self.invalid_y = self.y[invalid_indices]
+            self.y = self.y[processed_indices]
+        else:
+            self.x = self.objects
+            self.invalid_objects = None
+            self.invalid_y = None
+        self.binary_y = None
 
     def binarize(self, threshold):
-        self.binary_labels = np.array(self.property >= threshold, dtype='int32')
-
-    def load_dictionary(self, tokens, char2idx):
-        self.all_characters = tokens
-        self.char2idx = char2idx
-        self.n_characters = len(tokens)
+        self.binary_y = np.array(self.y >= threshold, dtype='int32')
 
 
 def get_fp(smiles):
     fp = []
-    for mol in smiles:
-        fp.append(mol2image(mol, n=2048))
-    return fp
+    processed_indices = []
+    invalid_indices = []
+    for i in range(len(smiles)):
+        mol = smiles[i]
+        tmp = np.array(mol2image(mol, n=2048))
+        if np.isnan(tmp[0]):
+            invalid_indices.append(i)
+        else:
+            fp.append(tmp)
+            processed_indices.append(i)
+    return np.array(fp), processed_indices, invalid_indices
+
+
+def get_desc(smiles, calc):
+    desc = []
+    processed_indices = []
+    invalid_indices = []
+    for i in range(len(smiles)):
+        sm = smiles[i]
+        try:
+            mol = Chem.MolFromSmiles(sm)
+            tmp = np.array(calc(mol))
+            desc.append(tmp)
+            processed_indices.append(i)
+        except:
+            invalid_indices.append(i)
+
+    desc_array = np.array(desc)
+    return desc_array, processed_indices, invalid_indices
+
+
+def normalize_desc(desc_array, desc_mean=None):
+    desc_array = np.array(desc_array).reshape(len(desc_array), -1)
+    ind = np.zeros(desc_array.shape)
+    for i in range(desc_array.shape[0]):
+        for j in range(desc_array.shape[1]):
+            try:
+                if np.isfinite(desc_array[i, j]):
+                    ind[i, j] = 1
+            except:
+                pass
+    for i in range(desc_array.shape[0]):
+        for j in range(desc_array.shape[1]):
+            if ind[i, j] == 0:
+                desc_array[i, j] = 0
+    if desc_mean is None:
+        desc_mean = np.mean(desc_array, axis=0)
+    for i in range(desc_array.shape[0]):
+        for j in range(desc_array.shape[1]):
+            if ind[i, j] == 0:
+                desc_array[i, j] = desc_mean[j]
+    return desc_array, desc_mean
 
 
 def mol2image(x, n=2048):
@@ -142,7 +207,7 @@ def mol2image(x, n=2048):
         return [np.nan]
 
 
-def sanitize_smiles(smiles, canonize=True):
+def sanitize_smiles(smiles, canonize=True, throw_warning=False):
     """
     Takes list of SMILES strings and returns list of their sanitized versions.
     For definition of sanitized SMILES check http://www.rdkit.org/docs/api/rdkit.Chem.rdmolops-module.html#SanitizeMol
@@ -164,7 +229,8 @@ def sanitize_smiles(smiles, canonize=True):
             else:
                 new_smiles.append(sm)
         except: 
-            warnings.warn('Unsanitized SMILES string: ' + sm, UserWarning)
+            if throw_warning:
+                warnings.warn('Unsanitized SMILES string: ' + sm, UserWarning)
             new_smiles.append('')
     return new_smiles
 
@@ -217,7 +283,7 @@ def save_smi_to_file(filename, smiles, unique=True):
     return f.closed
 
 
-def read_smi_file(filename, unique=True):
+def read_smi_file(filename, unique=True, add_start_end_tokens=False):
     """
     Reads SMILES from file. File must contain one SMILES string per line
     with \n token in the end of the line.
@@ -235,7 +301,10 @@ def read_smi_file(filename, unique=True):
     f = open(filename, 'r')
     molecules = []
     for line in f:
-        molecules.append(line[:-1])
+        if add_start_end_tokens:
+            molecules.append('<' + line[:-1] + '>')
+        else:
+            molecules.append(line[:-1])
     if unique:
         molecules = list(set(molecules))
     else:
@@ -270,49 +339,41 @@ def time_since(since):
     return '%dm %ds' % (m, s)
 
 
-def cross_validation_split(data, labels, n_folds=5, split='random', folds=None):
-    if split not in ['random', 'fixed']:
-        raise ValueError('Invalid value for argument \'split\': must be either \'random\' of \'fixed\'')
-    n = len(data)
-    assert n > 0
-    if split == 'fixed' and folds is None:
-        raise TypeError('Invalid type for argument \'folds\': found None, but must be list')
-    if split == 'random' and folds is not None:
-        warnings.warn('\'folds\' argument will be ignored: \'split\' set to random, '
-                          'but \'folds\' argument is provided.', UserWarning)
-
+def cross_validation_split(x, y, n_folds=5, split='random', folds=None):
+    assert(len(x) == len(y))
+    x = np.array(x)
+    y = np.array(y)
+    if split not in ['random', 'stratified', 'fixed']:
+        raise ValueError('Invalid value for argument \'split\': '
+                         'must be either \'random\', \'stratified\' '
+                         'or \'fixed\'')
     if split == 'random':
-        fold_len = round(n / n_folds)
-        folds = []
-        for i in range(n_folds):
-            folds = folds + [i]*fold_len
-        if len(folds) > n:
-            folds = folds[:n]
-        if len(folds) < n:
-            folds = folds + [i]*(n - len(folds))
-        assert(len(folds) == n)
-        ind = np.random.permutation(n)
-        new_data = []
-        new_labels = []
-        for i in ind:
-            new_data.append(data[i])
-            new_labels.append(labels[i])
-        data = new_data
-        labels = new_labels
-    
+        cv_split = KFold(n_splits=n_folds, shuffle=True)
+        folds = list(cv_split.split(x, y))
+    elif split == 'stratified':
+        cv_split = StratifiedKFold(n_splits=n_folds, shuffle=True)
+        folds = list(cv_split.split(x, y))
+    elif split == 'fixed' and folds is None:
+        raise TypeError(
+            'Invalid type for argument \'folds\': found None, but must be list')
     cross_val_data = []
     cross_val_labels = []
-    folds = np.array(folds)
-    for f in range(n_folds):
-        left = np.where(folds == f)[0].min()
-        right = np.where(folds == f)[0].max()
-        cross_val_data.append(data[left:right + 1])
-        cross_val_labels.append(list(labels[left:right + 1]))
+    if len(folds) == n_folds:
+        for fold in folds:
+            cross_val_data.append(x[fold[1]])
+            cross_val_labels.append(y[fold[1]])
+    elif len(folds) == len(x) and np.max(folds) == n_folds:
+        for f in range(n_folds):
+            left = np.where(folds == f)[0].min()
+            right = np.where(folds == f)[0].max()
+            cross_val_data.append(x[left:right + 1])
+            cross_val_labels.append(y[left:right + 1])
 
     return cross_val_data, cross_val_labels
 
 
-def read_smiles_property_file(path, delimiter=',', cols = [0, 1], keep_header=False):
+def read_object_property_file(path, delimiter=',', cols_to_read=[0, 1],
+                              keep_header=False):
     reader = csv.reader(open(path, 'r'), delimiter=delimiter)
     data_full = np.array(list(reader))
     if keep_header:
@@ -320,7 +381,9 @@ def read_smiles_property_file(path, delimiter=',', cols = [0, 1], keep_header=Fa
     else:
         start_position = 1
     assert len(data_full) > start_position
-    smiles = data_full[start_position:, cols[0]]
-    labels = np.array(data_full[start_position:, cols[1]], dtype='float')
-    assert len(smiles) == len(labels)
-    return smiles, labels
+    data = [[] for _ in range(len(cols_to_read))]
+    for i in range(len(cols_to_read)):
+        col = cols_to_read[i]
+        data[i] = data_full[start_position:, col]
+
+    return data
