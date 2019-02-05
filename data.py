@@ -13,8 +13,6 @@ from rdkit import DataStructs
 
 from sklearn.model_selection import KFold, StratifiedKFold
 
-from mordred import Calculator, descriptors
-
 
 class GeneratorData(object):
     def __init__(self, training_data_path, replay_data=None, replay_capacity=10000, use_cuda=None):
