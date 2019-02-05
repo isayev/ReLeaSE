@@ -74,7 +74,7 @@ class StackAugmentedRNN(nn.Module):
         stack_controls = self.stack_controls_layer(hidden_2_stack)
         stack_controls = F.softmax(stack_controls, dim=1)
         stack_input = self.stack_input_layer(hidden_2_stack.unsqueeze(0))
-        stack_input = F.tanh(stack_input)
+        stack_input = torch.tanh(stack_input)
         stack = self.stack_augmentation(stack_input.permute(1, 0, 2),
                                         stack, stack_controls)
         stack_top = stack[:, 0, :].unsqueeze(0)
@@ -130,7 +130,7 @@ class StackAugmentedRNN(nn.Module):
         loss.backward()
         self.optimizer.step()
 
-        return loss.data[0] / len(inp)
+        return loss.item() / len(inp)
 
     def evaluate(self, data, prime_str='<', end_token='>', predict_len=100, temperature=0.8):
         hidden = self.init_hidden()
@@ -140,7 +140,7 @@ class StackAugmentedRNN(nn.Module):
         predicted = prime_str
 
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_str)):
+        for p in range(len(prime_str)-1):
             _, hidden, cell, stack = self.forward(prime_input[p], hidden, cell, stack)
         inp = prime_input[-1]
 
@@ -304,7 +304,7 @@ class StackAugmentedGRU(nn.Module):
         predicted = prime_str
 
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_str)):
+        for p in range(len(prime_str)-1):
             _, hidden, stack = self.forward(prime_input[p], hidden, stack)
         inp = prime_input[-1]
 
@@ -312,8 +312,8 @@ class StackAugmentedGRU(nn.Module):
             output, hidden, stack = self.forward(inp, hidden, stack)
 
             # Sample from the network as a multinomial distribution
-            output_dist = output.data.view(-1).div(temperature).exp()
-            top_i = torch.multinomial(output_dist, 1)[0]
+            output_dist = output.data.cpu().view(-1).div(temperature).exp()
+            top_i = torch.multinomial(output_dist, 1)[0].cpu().numpy()
 
             # Add predicted character to string and use as next input
             predicted_char = data.all_characters[top_i]
@@ -402,9 +402,9 @@ class VanillaGRU(nn.Module):
 
     def init_hidden(self):
         if self.use_cuda:
-            return Variable(torch.zeros(self.n_layers * 2, 1, self.hidden_size).cuda())
+            return Variable(torch.zeros(self.n_layers * 1, 1, self.hidden_size).cuda())
         else:
-            return Variable(torch.zeros(self.n_layers * 2, 1, self.hidden_size))
+            return Variable(torch.zeros(self.n_layers * 1, 1, self.hidden_size))
 
     def train_step(self, inp, target):
         hidden = self.init_hidden()
@@ -425,7 +425,7 @@ class VanillaGRU(nn.Module):
         predicted = prime_str
 
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_str)):
+        for p in range(len(prime_str)-1):
             _, hidden = self.forward(prime_input[p], hidden)
         inp = prime_input[-1]
 
