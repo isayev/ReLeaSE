@@ -1,0 +1,13 @@
+# All smiles files
+*.smi 
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Intelij idea files
+*.idea
+
+# Log directory
+logs/
