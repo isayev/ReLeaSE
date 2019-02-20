@@ -1,5 +1,8 @@
-# All smiles files
-*.smi 
+# All smiles files 
+*.smi
+
+# Checkpoints
+checkpoints/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -11,3 +14,9 @@ __pycache__/
 
 # Log directory
 logs/
+
+# Ipython notebook checkpoints
+.ipynb_checkpoints/
+
+# OpenChem
+OpenChem/
