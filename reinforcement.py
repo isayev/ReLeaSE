@@ -1,141 +1,156 @@
+"""
+This class implements simple policy gradient algorithm for
+biasing the generation of molecules towards desired values of
+properties aka Reinforcement Learninf for Structural Evolution (ReLeaSE)
+as described in 
+Popova, M., Isayev, O., & Tropsha, A. (2018). 
+Deep reinforcement learning for de novo drug design. 
+Science advances, 4(7), eaap7885.
+"""
+
 import torch
 import torch.nn.functional as F
+import numpy as np
+from rdkit import Chem
 
 
 class Reinforcement(object):
-    def __init__(self, generator, predictor):
+    def __init__(self, generator, predictor, get_reward):
+        """
+        Constructor for the Reinforcement object.
+
+        Parameters
+        ----------
+        generator: object of type StackAugmentedRNN
+            generative model that produces string of characters (trajectories)
+
+        predictor: object of any predictive model type
+            predictor accepts a trajectory and returns a numerical
+            prediction of desired property for the given trajectory
+
+        get_reward: function
+            custom reward function that accepts a trajectory, predictor and
+            any number of positional arguments and returns a single value of
+            the reward for the given trajectory
+            Example:
+            reward = get_reward(trajectory=my_traj, predictor=my_predictor,
+                                custom_parameter=0.97)
+
+        Returns
+        -------
+        object of type Reinforcement used for biasing the properties estimated
+        by the predictor of trajectories produced by the generator to maximize
+        the custom reward function get_reward.
+        """
+
         super(Reinforcement, self).__init__()
         self.generator = generator
         self.predictor = predictor
+        self.get_reward = get_reward
 
-    def get_reward(self, smiles, threshold, invalid_reward=-2.0, **kwargs):
-        # Add continuous reward
-        mol, prop, nan_smiles = self.predictor.predict([smiles], **kwargs)
-        if len(nan_smiles) == 1:
-            return invalid_reward
-        if len(threshold) == 1:
-            if prop[0] >= threshold:
-                return 1.0
-            else:
-                return -1.0
-        elif len(threshold) == 2:
-            if ((prop[0] >= threshold[0]) and (prop[0] <= threshold[1])):
-                return 2.0
-            else:
-                return -2.0
+    def policy_gradient(self, data, n_batch=10, gamma=0.97,
+                        std_smiles=False, grad_clipping=None, **kwargs):
+        """
+        Implementation of the policy gradient algorithm.
 
-    def policy_gradient_replay(self, data, replay_memory, threshold, n_batch=100, **kwargs):
+        Parameters:
+        -----------
 
+        data: object of type GeneratorData
+            stores information about the generator data format such alphabet, etc
+
+        n_batch: int (default 10)
+            number of trajectories to sample per batch. When training on GPU
+            setting this parameter to to some relatively big numbers can result
+            in out of memory error. If you encountered such an error, reduce
+            n_batch.
+
+        gamma: float (default 0.97)
+            factor by which rewards will be discounted within one trajectory.
+            Usually this number will be somewhat close to 1.0.
+
+
+        std_smiles: bool (default False)
+            boolean parameter defining whether the generated trajectories will
+            be converted to standardized SMILES before running policy gradient.
+            Leave this parameter to the default value if your trajectories are
+            not SMILES.
+
+        grad_clipping: float (default None)
+            value of the maximum norm of the gradients. If not specified,
+            the gradients will not be clipped.
+
+        kwargs: any number of other positional arguments required by the
+            get_reward function.
+
+        Returns
+        -------
+        total_reward: float
+            value of the reward averaged through n_batch sampled trajectories
+
+        rl_loss: float
+            value for the policy_gradient loss averaged through n_batch sampled
+            trajectories
+
+        """
         rl_loss = 0
-        reward = 0
-        n_samples = 0
         self.generator.optimizer.zero_grad()
-
-        for _ in range(n_batch):
-
-            hidden = self.generator.init_hidden()
-            if self.generator.has_cell:
-                cell = self.generator.init_cell()
-            if self.generator.has_stack:
-                stack = self.generator.init_stack()
-
-            seq = replay_memory.sample()[0]
-            inp = data.char_tensor(seq)
-            cur_loss = 0
-
-            for p in range(len(inp)-1):
-                if self.generator.has_stack and self.generator.has_cell:
-                    output, hidden, cell, stack = self.generator(inp[p], hidden, cell, stack)
-                elif self.generator.has_stack and not self.generator.has_cell:
-                    output, hidden, stack = self.generator(inp[p], hidden, stack)
-                elif not self.generator.has_stack and self.generator.has_cell:
-                    output, hidden, cell = self.generator(inp[p], hidden, cell)
-                elif not self.generator.has_stack and not self.generator.has_cell:
-                    output, hidden = self.generator(inp[p], hidden)
-                top_i = inp.data[p+1]
-                log_dist = F.log_softmax(output, dim=1)
-                cur_loss += log_dist[0, top_i]
-                if seq[p+1] == '>':
-                    reward = self.get_reward(seq[1:-1],  threshold, **kwargs)
-
-            rl_loss += cur_loss * reward
-            n_samples += 1
-
-        rl_loss = -rl_loss / n_samples
-        rl_loss.backward()
-        self.generator.optimizer.step()
-
-        return rl_loss.item()
-
-    def policy_gradient(self, data,  threshold, prime_str='<', end_token='>', 
-                        predict_len=200, temperature=0.8, n_batch=100, **kwargs):
-
-        rl_loss = 0
-        reward = 0
-        n_samples = 0
-        self.generator.zero_grad()
+        total_reward = 0
         
         for _ in range(n_batch):
 
+            # Sampling new trajectory
+            reward = 0
+            trajectory = '<>'
+            while reward == 0:
+                trajectory = self.generator.evaluate(data)
+                if std_smiles:
+                    try:
+                        mol = Chem.MolFromSmiles(trajectory[1:-1])
+                        trajectory = '<' + Chem.MolToSmiles(mol) + '>'
+                        reward = self.get_reward(trajectory[1:-1], 
+                                                 self.predictor, 
+                                                 **kwargs)
+                    except:
+                        reward = 0
+                else:
+                    reward = self.get_reward(trajectory[1:-1],
+                                             self.predictor, 
+                                             **kwargs)
+
+            # Converting string of characters into tensor
+            trajectory_input = data.char_tensor(trajectory)
+            discounted_reward = reward
+            total_reward += reward
+
+            # Initializing the generator's hidden state
             hidden = self.generator.init_hidden()
             if self.generator.has_cell:
                 cell = self.generator.init_cell()
+                hidden = (hidden, cell)
             if self.generator.has_stack:
                 stack = self.generator.init_stack()
+            else:
+                stack = None
 
-            prime_input = data.char_tensor(prime_str)
-            predicted = prime_str
+            # "Following" the trajectory and accumulating the loss
+            for p in range(len(trajectory)-1):
+                output, hidden, stack = self.generator(trajectory_input[p], 
+                                                       hidden, 
+                                                       stack)
+                log_probs = F.log_softmax(output, dim=1)
+                top_i = trajectory_input[p+1]
+                rl_loss -= (log_probs[0, top_i]*discounted_reward)
+                discounted_reward = discounted_reward * gamma
 
-            # Use priming string to "build up" hidden state
-            for p in range(len(prime_str)-1):
-                if self.generator.has_stack and self.generator.has_cell:
-                    _, hidden, cell, stack = self.generator(prime_input[p], hidden, cell, stack)
-                elif self.generator.has_stack and not self.generator.has_cell:
-                    _, hidden, stack = self.generator(prime_input[p], hidden, stack)
-                elif not self.generator.has_stack and self.generator.has_cell:
-                    _, hidden, cell = self.generator(prime_input[p], hidden, cell)
-                elif not self.generator.has_stack and not self.generator.has_cell:
-                    _, hidden = self.generator(prime_input[p], hidden)
-            inp = prime_input[-1]
-
-            cur_loss = 0
-            for p in range(predict_len):
-
-                if self.generator.has_stack and self.generator.has_cell:
-                    output, hidden, cell, stack = self.generator(inp, hidden, cell, stack)
-                elif self.generator.has_stack and not self.generator.has_cell:
-                    output, hidden, stack = self.generator(inp, hidden, stack)
-                elif not self.generator.has_stack and self.generator.has_cell:
-                    output, hidden, cell = self.generator(inp, hidden, cell)
-                elif not self.generator.has_stack and not self.generator.has_cell:
-                    output, hidden = self.generator(inp, hidden)
-
-                # Sample from the network as a multinomial distribution
-                output_dist = output.data.view(-1).div(temperature).exp()
-                top_i = torch.multinomial(output_dist, 1)[0]
-                log_dist = F.log_softmax(output, dim=1)
-                cur_loss += log_dist[0, top_i]
-
-                # Add predicted character to string and use as next input
-                predicted_char = data.all_characters[top_i]
-                predicted += predicted_char
-                inp = data.char_tensor(predicted_char)
-
-                if predicted_char == end_token:
-                    reward = self.get_reward(predicted[1:-1], threshold, **kwargs)
-                    break
-                else:
-                    reward = -10
-
-            if reward != 0.0:
-                rl_loss += cur_loss * reward
-                n_samples += 1
-
-        rl_loss = -rl_loss / n_samples
+        # Doing backward pass and parameters update
+        rl_loss = rl_loss / n_batch
+        total_reward = total_reward / n_batch
         rl_loss.backward()
+        if grad_clipping is not None:
+            torch.nn.utils.clip_grad_norm_(self.generator.parameters(), 
+                                           grad_clipping)
+
         self.generator.optimizer.step()
-
-        return rl_loss.item()
-
-    def transfer_learning(self, data, n_epochs, augment=False):
-        _ = self.generator.fit(data, n_epochs, augment=augment)
+        
+        return total_reward, rl_loss.item()
