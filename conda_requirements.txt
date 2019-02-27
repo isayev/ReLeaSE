@@ -5,3 +5,5 @@ scipy
 pytest
 pytest-cov
 ipython
+ipykernel
+
