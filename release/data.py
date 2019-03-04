@@ -11,7 +11,8 @@ class GeneratorData(object):
     Docstring coming soon...
     """
     def __init__(self, training_data_path, tokens=None, start_token='<', 
-                 end_token='>', max_len=120, use_cuda=None, **kwargs):
+                 end_token='>', pad_symbol=' ', max_len=120, use_cuda=None,
+                 **kwargs):
         """
         Constructor for the GeneratorData object.
 
@@ -58,6 +59,7 @@ class GeneratorData(object):
                                                        **kwargs)
         self.start_token = start_token
         self.end_token = end_token
+        self.pad_symbol = pad_symbol
         self.file = []
         for i in range(len(data)):
             if len(data[i]) <= max_len:
@@ -65,6 +67,7 @@ class GeneratorData(object):
         self.file_len = len(self.file)
         self.all_characters, self.char2idx, \
         self.n_characters = tokenize(self.file, tokens)
+        self.pad_symbol_idx = self.all_characters.index(self.pad_symbol)
         self.use_cuda = use_cuda
         if self.use_cuda is None:
             self.use_cuda = torch.cuda.is_available()
@@ -74,38 +77,58 @@ class GeneratorData(object):
         self.char2idx = char2idx
         self.n_characters = len(tokens)
 
-    def random_chunk(self):
+    def random_chunk(self, batch_size):
         """
         Samples random SMILES string from generator training data set.
         Returns:
             random_smiles (str).
         """
-        index = random.randint(0, self.file_len-1)
-        return self.file[index]
+        index = np.random.randint(0, self.file_len-1, batch_size)
+        return [self.file[i][:-1] for i in index], \
+               [self.file[i][1:] for i in index]
 
-    def char_tensor(self, string):
-        """
-        Converts SMILES into tensor of indices wrapped into torch.autograd.Variable.
-        Args:
-            string (str): input SMILES string
-        Returns:
-            tokenized_string (torch.autograd.Variable(torch.tensor))
-        """
-        tensor = torch.zeros(len(string)).long()
-        for c in range(len(string)):
-            tensor[c] = self.all_characters.index(string[c])
+    def seq2tensor(self, seqs, tokens, flip=True):
+        tensor = np.zeros((len(seqs), len(seqs[0])))
+        for i in range(len(seqs)):
+            for j in range(len(seqs[i])):
+                if seqs[i][j] in tokens:
+                    tensor[i, j] = tokens.index(seqs[i][j])
+                else:
+                    tokens = tokens + [seqs[i][j]]
+                    tensor[i, j] = tokens.index(seqs[i][j])
+        if flip:
+            tensor = np.flip(tensor, axis=1).copy()
+        return tensor, tokens
+
+    def pad_sequences(self, seqs, max_length=None, pad_symbol=' '):
+        if max_length is None:
+            max_length = -1
+            for seq in seqs:
+                max_length = max(max_length, len(seq))
+        lengths = []
+        for i in range(len(seqs)):
+            cur_len = len(seqs[i])
+            lengths.append(cur_len)
+            seqs[i] = seqs[i] + pad_symbol * (max_length - cur_len)
+        return seqs, lengths
+
+    def random_training_set(self, batch_size):
+        inp, target = self.random_chunk(batch_size)
+        inp_padded, _ = self.pad_sequences(inp)
+        inp_tensor, self.all_characters = self.seq2tensor(inp_padded,
+                                                          tokens=self.all_characters,
+                                                          flip=False)
+        target_padded, _ = self.pad_sequences(target)
+        target_tensor, self.all_characters = self.seq2tensor(target_padded,
+                                                             tokens=self.all_characters,
+                                                             flip=False)
+        self.n_characters = len(self.all_characters)
+        inp_tensor = torch.tensor(inp_tensor).long()
+        target_tensor = torch.tensor(target_tensor).long()
         if self.use_cuda:
-            return torch.tensor(tensor).cuda()
-        else:
-            return torch.tensor(tensor)
-
-    def random_training_set(self, smiles_augmentation):
-        chunk = self.random_chunk()
-        if smiles_augmentation is not None:
-            chunk = '<' + smiles_augmentation.randomize_smiles(chunk[1:-1]) + '>'
-        inp = self.char_tensor(chunk[:-1])
-        target = self.char_tensor(chunk[1:])
-        return inp, target
+            inp_tensor = inp_tensor.cuda()
+            target_tensor = target_tensor.cuda()
+        return inp_tensor, target_tensor
 
     def read_sdf_file(self, path, fields_to_read):
         raise NotImplementedError

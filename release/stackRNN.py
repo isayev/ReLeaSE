@@ -4,7 +4,8 @@ stack as proposed in https://arxiv.org/abs/1503.01007
 There are options of using LSTM or GRU, as well as using the generator without
 memory stack.
 """
-
+import time
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -21,8 +22,9 @@ from smiles_enumerator import SmilesEnumerator
 class StackAugmentedRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, layer_type='GRU',
                  n_layers=1, is_bidirectional=False, has_stack=False,
-                 stack_width=None, stack_depth=None, use_cuda=None,
-                 optimizer_instance=torch.optim.Adadelta, lr=0.01):
+                 stack_width=None, stack_depth=None, ignore_idx = 0,
+                 use_cuda=None, optimizer_instance=torch.optim.Adadelta,
+                 lr=0.01):
         """
         Constructor for the StackAugmentedRNN object.
 
@@ -120,10 +122,10 @@ class StackAugmentedRNN(nn.Module):
                              bidirectional=self.is_bidirectional)
             self.decoder = nn.Linear(hidden_size * self.num_dir, output_size)
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
-        
+        self.ignore_idx = ignore_idx
         if self.use_cuda:
             self = self.cuda()
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=self.ignore_idx)
         self.lr = lr
         self.optimizer_instance = optimizer_instance
         self.optimizer = self.optimizer_instance(self.parameters(), lr=lr,
@@ -195,7 +197,7 @@ class StackAugmentedRNN(nn.Module):
         next_stack: torch.tensor
             next state of the augmented memory stack
         """
-        inp = self.encoder(inp.view(1, -1))
+        inp = self.encoder(inp)
         if self.has_stack:
             if self.has_cell:
                 hidden_ = hidden[0]
@@ -212,9 +214,11 @@ class StackAugmentedRNN(nn.Module):
             stack = self.stack_augmentation(stack_input.permute(1, 0, 2),
                                             stack, stack_controls)
             stack_top = stack[:, 0, :].unsqueeze(0)
-            inp = torch.cat((inp, stack_top), dim=2)
-        output, next_hidden = self.rnn(inp.view(1, 1, -1), hidden)
-        output = self.decoder(output.view(1, -1))
+            inp = torch.cat((inp.unsqueeze(0), stack_top), dim=2)
+        else:
+            inp = inp.unsqueeze(0)
+        output, next_hidden = self.rnn(inp, hidden)
+        output = self.decoder(output.squeeze(0))
         return output, next_hidden, stack
 
     def stack_augmentation(self, input_val, prev_stack, controls):
@@ -254,7 +258,7 @@ class StackAugmentedRNN(nn.Module):
         new_stack = a_no_op * prev_stack + a_push * stack_up + a_pop * stack_down
         return new_stack
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size):
         """
         Initialization of the hidden state of RNN.
 
@@ -265,13 +269,15 @@ class StackAugmentedRNN(nn.Module):
             account number of RNN layers and directions)
         """
         if self.use_cuda:
-            return Variable(torch.zeros(self.n_layers * self.num_dir, 1,
+            return Variable(torch.zeros(self.n_layers * self.num_dir,
+                                        batch_size,
                                         self.hidden_size).cuda())
         else:
-            return Variable(torch.zeros(self.n_layers * self.num_dir, 1,
+            return Variable(torch.zeros(self.n_layers * self.num_dir,
+                                        batch_size,
                                         self.hidden_size))
 
-    def init_cell(self):
+    def init_cell(self, batch_size):
         """
         Initialization of the cell state of LSTM. Only used when layers_type is
         'LSTM'
@@ -283,13 +289,15 @@ class StackAugmentedRNN(nn.Module):
             account number of RNN layers and directions)
         """
         if self.use_cuda:
-            return Variable(torch.zeros(self.n_layers * self.num_dir, 1,
+            return Variable(torch.zeros(self.n_layers * self.num_dir,
+                                        batch_size,
                                         self.hidden_size).cuda())
         else:
-            return Variable(torch.zeros(self.n_layers * self.num_dir, 1,
+            return Variable(torch.zeros(self.n_layers * self.num_dir,
+                                        batch_size,
                                         self.hidden_size))
 
-    def init_stack(self):
+    def init_stack(self, batch_size):
         """
         Initialization of the stack state. Only used when has_stack is True
 
@@ -298,7 +306,7 @@ class StackAugmentedRNN(nn.Module):
         stack: torch.tensor
             tensor filled with zeros
         """
-        result = torch.zeros(1, self.stack_depth, self.stack_width)
+        result = torch.zeros(batch_size, self.stack_depth, self.stack_width)
         if self.use_cuda:
             return Variable(result.cuda())
         else:
@@ -324,26 +332,31 @@ class StackAugmentedRNN(nn.Module):
             length)
 
         """
-        hidden = self.init_hidden()
+        batch_size = inp.size()[0]
+        seq_len = inp.size()[1]
+        hidden = self.init_hidden(batch_size)
         if self.has_cell:
-            cell = self.init_cell()
+            cell = self.init_cell(batch_size)
             hidden = (hidden, cell)
         if self.has_stack:
-            stack = self.init_stack()
+            stack = self.init_stack(batch_size)
         else:
             stack = None
         self.optimizer.zero_grad()
         loss = 0
-        for c in range(len(inp)):
-            output, hidden, stack = self(inp[c], hidden, stack)
-            loss += self.criterion(output, target[c].unsqueeze(0))
+        for c in range(seq_len):
+            output, hidden, stack = self(inp[:, c], hidden, stack)
+            loss += self.criterion(output, target[:, c])
+
 
         loss.backward()
         self.optimizer.step()
 
-        return loss.item() / len(inp)
+        return loss.item() / batch_size
+
     
-    def evaluate(self, data, prime_str='<', end_token='>', predict_len=100):
+    def evaluate(self, data, prime_str='<', end_token='>', predict_len=100,
+                 batch_size=8):
         """
         Generates new string from the model distribution.
 
@@ -371,40 +384,58 @@ class StackAugmentedRNN(nn.Module):
             Newly generated sample from the model distribution.
 
         """
-        hidden = self.init_hidden()
+        hidden = self.init_hidden(batch_size)
         if self.has_cell:
-            cell = self.init_cell()
+            cell = self.init_cell(batch_size)
             hidden = (hidden, cell)
         if self.has_stack:
-            stack = self.init_stack()
+            stack = self.init_stack(batch_size)
         else:
             stack = None
-        prime_input = data.char_tensor(prime_str)
-        new_sample = prime_str
+        prime_input, _ = data.seq2tensor([prime_str]*batch_size,
+                                         tokens=data.all_characters,
+                                         flip=False)
+        prime_input = torch.tensor(prime_input).long()
+        if self.use_cuda:
+            prime_input = prime_input.cuda()
+        new_samples = [[prime_str]*batch_size]
 
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_str)-1):
-            _, hidden, stack = self.forward(prime_input[p], hidden, stack)
-        inp = prime_input[-1]
+        for p in range(len(prime_str[0])-1):
+            _, hidden, stack = self.forward(prime_input[:, p], hidden, stack)
+        inp = prime_input[:, -1]
 
         for p in range(predict_len):
             output, hidden, stack = self.forward(inp, hidden, stack)
 
             # Sample from the network as a multinomial distribution
-            probs = torch.softmax(output, dim=1)
-            top_i = torch.multinomial(probs.view(-1), 1)[0].cpu().numpy()
+            probs = torch.softmax(output, dim=1).detach()#.cpu().numpy()
+            #top_i = self.sample_from_probs(probs)
+            top_i = torch.multinomial(probs, 1).cpu().numpy()
 
             # Add predicted character to string and use as next input
-            predicted_char = data.all_characters[top_i]
-            new_sample += predicted_char
-            inp = data.char_tensor(predicted_char)
-            if predicted_char == end_token:
-                break
+            predicted_char = (np.array(data.all_characters)[top_i].reshape(-1))
+            predicted_char = predicted_char.tolist()
+            new_samples.append(predicted_char)
 
-        return new_sample
+            # Prepare next input token for the generator
+            inp, _ = data.seq2tensor(predicted_char, tokens=data.all_characters)
+            inp = torch.tensor(inp.squeeze(1)).long()
+            if self.use_cuda:
+                inp = inp.cuda()
 
-    def fit(self, data, n_iterations, all_losses=[], print_every=100,
-            plot_every=10, augment=False):
+        # Remove characters after end tokens
+        string_samples = []
+        new_samples = np.array(new_samples)
+        for i in range(batch_size):
+            sample = list(new_samples[:, i])
+            if end_token in sample:
+                end_token_idx = sample.index(end_token)
+                string_samples.append(''.join(sample[1:end_token_idx]))
+        return string_samples
+
+    def fit(self, data, batch_size, n_iterations, all_losses=[],
+            print_every=100, plot_every=10):
         """
         This methods fits the parameters of the model. Training is performed to
         minimize the cross-entropy loss when predicting the next character
@@ -441,13 +472,8 @@ class StackAugmentedRNN(nn.Module):
         start = time.time()
         loss_avg = 0
 
-        if augment:
-            smiles_augmentation = SmilesEnumerator()
-        else:
-            smiles_augmentation = None
-
         for epoch in trange(1, n_iterations + 1, desc='Training in progress...'):
-            inp, target = data.random_training_set(smiles_augmentation)
+            inp, target = data.random_training_set(batch_size)
             loss = self.train_step(inp, target)
             loss_avg += loss
 
@@ -456,7 +482,7 @@ class StackAugmentedRNN(nn.Module):
                                                epoch / n_iterations * 100, loss)
                       )
                 print(self.evaluate(data=data, prime_str = '<',
-                                    predict_len=100), '\n')
+                                    predict_len=100, batch_size=1), '\n')
 
             if epoch % plot_every == 0:
                 all_losses.append(loss_avg / plot_every)

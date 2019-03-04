@@ -2,15 +2,20 @@
 Unit tests for StackAugmentedRNN class
 """
 import sys
-sys.path.append('./')
+sys.path.append('./release/')
 import pytest
 import torch
 from stackRNN import StackAugmentedRNN
 from data import GeneratorData
 
 gen_data_path = './data/logP_labels.csv'
+tokens = [' ', '<', '>', '#', '%', ')', '(', '+', '-', '/', '.', '1', '0', '3',
+          '2', '5', '4', '7', '6', '9', '8', '=', 'A', '@', 'C', 'B', 'F', 'I',
+          'H', 'O', 'N', 'P', 'S', '[', ']', '\\', 'c', 'e', 'i', 'l', 'o', 'n',
+          'p', 's', 'r', '\n']
 gen_data = GeneratorData(training_data_path=gen_data_path, delimiter=',',
-                         cols_to_read=[1], keep_header=False)
+                         cols_to_read=[1], keep_header=False, tokens=tokens)
+
 
 hidden_size = 50
 stack_width = 50
@@ -32,9 +37,8 @@ def test_bidirectional_stack_gru():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -51,9 +55,8 @@ def test_unidirectional_stack_gru():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -70,9 +73,8 @@ def test_unidirectional_gru_no_stack():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -89,9 +91,8 @@ def test_bidirectional_gru_no_stack():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -108,9 +109,8 @@ def test_bidirectional_stack_lstm():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -127,9 +127,8 @@ def test_unidirectional_stack_lstm():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -148,7 +147,7 @@ def test_unidirectional_lstm_no_stack():
                                      lr=lr)
     my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=10)
 
     my_generator.evaluate(gen_data)
 
@@ -165,8 +164,7 @@ def test_bidirectional_lstm_no_stack():
                                      use_cuda=use_cuda,
                                      optimizer_instance=optimizer_instance,
                                      lr=lr)
-    my_generator = my_generator.cuda()
 
-    losses = my_generator.fit(gen_data, 100)
+    losses = my_generator.fit(gen_data, batch_size=16, n_iterations=100)
 
     my_generator.evaluate(gen_data)
