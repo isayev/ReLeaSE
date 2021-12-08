@@ -25,7 +25,7 @@ If you installed your Python with Anacoda you can run the following commands to 
 git clone https://github.com/isayev/ReLeaSE.git
 cd ReLeaSE
 # Create new conda environment with Python 3.6
-conda create --new release python=3.6
+conda create -n release python=3.6
 # Activate the environment
 conda activate release
 # Install conda dependencies
